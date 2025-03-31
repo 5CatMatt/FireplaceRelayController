@@ -6,9 +6,11 @@ Read an inbound PWM signal in order to activate a relay coil. The signal will
 toggle between two frequencies at a 50% duty cycle once per second. If the 
 pulsed signal is not detected, or is not toggling, the relay should be deactivated.
 
+Inbound frequency will be low, less than 1kHz due to python limitations, no clock div needed.
+
 This is part of the protection method for the fireplace control. The thermostat
 functions are handled by python on an SBC. If the script fails or the SBC hangs
-this controller will deactivate the relay, turning off the fireplace.
+this controller shall deactivate the relay, turning off the fireplace.
 
 */
 
@@ -18,54 +20,61 @@ this controller will deactivate the relay, turning off the fireplace.
 
 void setup() {
   Serial.begin(115200);
+
+  // Initialize relay
   pinMode(outputPin, OUTPUT);
-  digitalWrite(outputPin, relayState); // Initialize relay
+  digitalWrite(outputPin, relayState);
+
+  // PWM input pin attached to interrupt to calculate inbound frequency
   pinMode(inputPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(inputPin), pulseDetected, RISING);
 }
 
 void loop() {
-  // Check frequency validity with tolerance
-  bool newSignalValid = (fabs(currentFrequency - targetFreq1) < tolerance1) || 
-                        (fabs(currentFrequency - targetFreq2) < tolerance2);
 
-  bool desiredRelayState = newSignalValid ? HIGH : LOW;
+  unsigned long currentMillis = millis();
 
-  // Serial.print("signal valid: ");
-  // Serial.print(newSignalValid);
-  // Serial.print("  desired: ");
-  // Serial.print(desiredRelayState);
-  // Serial.print("  Relay state: ");
-  // Serial.println(relayState);
+  // Check frequency status every second
+  if (currentMillis - lastCheckTime >= checkInterval) {
+    lastCheckTime = currentMillis;
 
-  if (desiredRelayState != relayState) {
-    if (millis() - lastStateChangeTime >= MIN_TOGGLE_INTERVAL) {
-      relayState = desiredRelayState;
-      digitalWrite(outputPin, relayState);
-      lastStateChangeTime = millis();
-      
-      Serial.print("Relay changed to: ");
-      Serial.println(relayState == LOW ? "ON" : "OFF");
+    bool newLowFrequencyDetected = (fabs(currentFrequency - targetFreq1) < tolerance1);
+    bool newHighFrequencyDetected = (fabs(currentFrequency - targetFreq2) < tolerance2);
+
+    // If state hasn't changed for a full second, deactivate relay
+    if (newLowFrequencyDetected == lowFrequencyDetected && 
+        newHighFrequencyDetected == highFrequencyDetected) {
+      digitalWrite(outputPin, HIGH);
+      relayState = false;
+    } else {
+      lowFrequencyDetected = newLowFrequencyDetected;
+      highFrequencyDetected = newHighFrequencyDetected;
     }
   }
 
-  // Debug output
-  static unsigned long lastPrintTime = 0;
-  if (millis() - lastPrintTime >= 1000) {
-    Serial.print("Freq: ");
-    Serial.print(currentFrequency);
-    Serial.print(" Hz | Valid: ");
-    Serial.print(newSignalValid  ? "YES" : "NO");
-    Serial.print(" | Relay: ");
-    Serial.println(relayState == LOW ? "ON" : "OFF");
-    lastPrintTime = millis();
+  // Control relay activation with 10-minute cooldown
+  if ((lowFrequencyDetected || highFrequencyDetected) && !relayState) {
+    if (millis() - lastActivationTime >= activationCooldown) {
+      digitalWrite(outputPin, LOW);  // Activate relay
+      relayState = true;
+      lastActivationTime = millis();
+    }
   }
+
+  // The relay can be deactivated at any time
+  if (!lowFrequencyDetected && !highFrequencyDetected) {
+    digitalWrite(outputPin, HIGH);
+    relayState = false;
+  }
+
 }
 
 void pulseDetected() {
   unsigned long currentTime = micros();
+
   if (lastPulseTime > 0) {
-    currentFrequency = frequencyToggleTime / (currentTime - lastPulseTime);
+    currentFrequency = microsecondsInSeconds / (currentTime - lastPulseTime);
   }
+
   lastPulseTime = currentTime;
 }
