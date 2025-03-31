@@ -1,5 +1,3 @@
-
-
 const int inputPin = 2;             // Interrupt-capable pin to read input frequency
 const int outputPin = 4;            // Relay control (Active LOW)
 const float targetFreq1 = 75.0;     // Expected frequency 1
@@ -20,7 +18,8 @@ bool highFrequencyDetected = false;
 unsigned long lastCheckTime = 0;
 unsigned long lastActivationTime = 0;
 const unsigned long checkInterval = 1000; // 1 second
-const unsigned long activationCooldown = 600000; // 10 minutes
+const unsigned long activationCooldown = 30000; // TODO DEBUG
+// const unsigned long activationCooldown = 600000; // 10 minutes
 
 bool signalValid = false;
 bool relayState = HIGH;

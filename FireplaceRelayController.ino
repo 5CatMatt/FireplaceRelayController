@@ -12,11 +12,14 @@ This is part of the protection method for the fireplace control. The thermostat
 functions are handled by python on an SBC. If the script fails or the SBC hangs
 this controller shall deactivate the relay, turning off the fireplace.
 
+TODO - Add format failed counter to frequecy detection. Using the noise version of
+python PWM so there are some false triggers occuring. 
+
 */
 
 #include <math.h>
 
-#include <Defines.h>
+#include "Defines.h"
 
 void setup() {
   Serial.begin(115200);
@@ -37,6 +40,8 @@ void loop() {
   // Check frequency status every second
   if (currentMillis - lastCheckTime >= checkInterval) {
     lastCheckTime = currentMillis;
+
+    // Serial.println(currentFrequency);
 
     bool newLowFrequencyDetected = (fabs(currentFrequency - targetFreq1) < tolerance1);
     bool newHighFrequencyDetected = (fabs(currentFrequency - targetFreq2) < tolerance2);
@@ -66,6 +71,8 @@ void loop() {
     digitalWrite(outputPin, HIGH);
     relayState = false;
   }
+
+  Serial.println(relayState);
 
 }
 
